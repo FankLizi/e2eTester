@@ -1,5 +1,11 @@
 # @e2e-dev/e2b
 
+## 0.0.2
+
+### Patch Changes
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Update agent-device to 0.21.38. Opening an app now waits for the app's first screen before the first capture, and on Android a relaunch accepts a package that Android restarts at once. On iOS, `device.back()` presses the navigation bar's back button when there is one, keyboard dismiss and enter have a bounded idle wait, and agent-device establishes the screen origin of a full-screen private accessibility root.
+
 ## 0.0.1
 
 ### Patch Changes

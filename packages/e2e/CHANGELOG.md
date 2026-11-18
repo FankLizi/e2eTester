@@ -1,5 +1,104 @@
 # e2e
 
+## 0.24.0
+
+### Minor Changes
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - **Breaking:** `test.extend()` fixtures are set up on demand, as in Playwright and Vitest. A test sets up the fixtures its body and its `beforeEach` and `afterEach` hooks name in their first parameter, and the fixtures those fixtures name; a suite hook sets up the worker fixtures it names. A fixture nothing names no longer runs.
+  
+  To migrate:
+  
+  - A fixture that exists for its side effect (it seeds data, installs a build, starts a watcher) and that no test names needs `auto: true`: `[fn, { auto: true }]` runs for every test, `[fn, { scope: 'worker', auto: true }]` once per worker.
+  - A fixture that relies on another one running first names it: `task: async ({ project, agent }, use) => {}`.
+  - A test body, a hook, and a fixture function destructure their first parameter. `async (fixtures) => {}`, `async (_, use) => {}`, a rest property (`{ app, ...rest }`), and a bound function (`fn.bind()`) are now a `COLLECTION_ERROR`; a fixture that needs nothing writes `async ({}, use) => {}`.
+  
+  A fixture can now name the fixtures declared beside it in the same `test.extend()` call, in any order; a cycle is a `COLLECTION_ERROR` naming it.
+  
+  These mistakes fail at collection, before any engine starts, with the file and line of the code: a fixture name the target does not have (it was `UNSUPPORTED_CAPABILITY` in the test), and a `beforeAll`, `afterAll`, or worker fixture that names a test fixture (it was `HOOK_FAILED`). A test that does not run on a target (`platforms`, `requires`, `test.skipIf`) is not checked there.
+  
+  An `afterEach` hook that names a fixture whose setup failed is skipped. On an engine with `isolation: 'worker'`, a suite hook or a worker fixture teardown that names no engine fixture, `app`, or `screen` opens no engine attempt.
+
+### Patch Changes
+
+- [#1785](https://github.com/e2e-inc/e2e/pull/1785) [`ceaea64`](https://github.com/e2e-inc/e2e/commit/ceaea64ceead09d0a0f8cb5b384ef0d9ffac23a1) Thanks [@okwasniewski](https://github.com/okwasniewski)! - Bump playwright-core to 1.65.1 and `@ai-sdk/provider` to 4.0.38. Smol sandboxes use the Playwright 1.65.1 image.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Bump `@agentclientprotocol/sdk` to 2.7.0, and oxc-parser, oxc-transform, `@oxc-project/runtime` to 0.159.0.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - The CLI starts without loading the YAML and TOML parsers, which only `e2e init` uses to write a CI pipeline and a Codex MCP config. Every command starts a little faster.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Add `e2e report` to open the HTML report written by `@e2e-dev/html-reporter` in the default browser.
+
+- [#1633](https://github.com/e2e-inc/e2e/pull/1633) [`0b44859`](https://github.com/e2e-inc/e2e/commit/0b4485989d3b6aad0188c66e5f34a465894afb51) Thanks [@leszko11](https://github.com/leszko11)! - Read a listed node's computed style from a read-only project tool with
+  `getToolContext(options).read({ id }, { style: ['color', 'font-weight'] })`.
+  The web engine returns allow-listed CSS values, secret-redacted, under the
+  step's deadline. Engines can implement the optional `readStyle` method over the
+  engine protocol for the `computed-style` capability; a read on an engine
+  without it fails with `POLICY_DENIED`.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Use `reporters: ['dot']` or `--reporter dot` to print one character for each selected test result.
+
+- [#1737](https://github.com/e2e-inc/e2e/pull/1737) [`0a5ee16`](https://github.com/e2e-inc/e2e/commit/0a5ee16387cf213df547a8422b7d690675744986) Thanks [@kdy1](https://github.com/kdy1)! - New package `@e2e-dev/core`: the engine contract, locators, agent, replay cache, and engine sessions that `e2e` is built on. `e2e` depends on it at the same version, and `e2e/engine` and `e2e/agent` re-export it unchanged. `@e2e-dev/web` and `@e2e-dev/mobile` peer on `@e2e-dev/core` beside `e2e`, and import the contract from `@e2e-dev/core/engine`, which a third-party engine can now import too. npm, pnpm and Bun install the new peer themselves. A Yarn project lists `@e2e-dev/core` beside the engine; `e2e init` and `e2e upgrade` add it.
+
+- [#1734](https://github.com/e2e-inc/e2e/pull/1734) [`dbe3dc5`](https://github.com/e2e-inc/e2e/commit/dbe3dc54a9123b10e535441f785de2e81a202798) Thanks [@kdy1](https://github.com/kdy1)! - New package `@e2e-dev/core`: drive a browser or a native app from plain code, with no test runner, config file, or report. `launch(web())` prepares an engine and returns a host; `host.newSession()` opens an isolated session holding `screen`, `app`, `platform`, and the engine's fixture. `session.saveState()` captures state in memory, and `SessionState.export({ key })` returns it only AES-256-GCM encrypted, as `session-state-1` bytes. Secrets go to `launch({ secrets })` and fill through `host.secret(name)`. `createAgent(session, { model, cache })` from `@e2e-dev/core/agent` adds the agent: with `cache`, every `act` names its recording with `cacheKey`.
+  
+  `@e2e-dev/web` and `@e2e-dev/mobile` need `e2e` only for the `test` their main entry exports, so their `e2e` peer is optional. Without `e2e`, the main entry still loads and its engine factory works; `test`, `describe`, and the hooks throw `RUNNER_NOT_INSTALLED` when called. Its types still name `e2e`, so a TypeScript program without it imports from the `/engine` entry or sets `skipLibCheck`. `@e2e-dev/core/agent` also exports what `e2e/agent` does, `defineTool` among it.
+  
+  Device targets take `app.linkBase`: `app.open('/orders/42')` then opens the path as a link in the pinned app, through the new optional engine hook `session.openLink` (protocol method `session/openLink`). `@e2e-dev/mobile` implements it.
+  
+  `@e2e-dev/web/engine` and `@e2e-dev/mobile/engine` export the engine factories and their types without `test`, so a program that only drives an engine never loads the test runner. `defineEngine<Fixtures>()` and `EngineHandle<Fixtures>` now carry the fixtures an engine contributes as a type, and `defineEngine` requires a factory for each one `Fixtures` names: `web()` is an `EngineHandle<WebFixtures>`, `mobile()` an `EngineHandle<MobileFixtures>`. `defineEngine` refuses a fixture named `close`, `saveState`, or `setDefaultTimeout`, the methods of a session. `@e2e-dev/core/engine` (and `e2e/engine`) exports `isRefusedLinkScheme`, the scheme list app links are refused by, which `@e2e-dev/mobile` now uses for `device.openLink`.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `test.extend()` can extend a fixture the `test` already has, a built-in one included: `base.extend({ device: async ({ device }, use) => { await device.setPermission('camera', 'deny'); await use(device); } })`. Inside the function the fixture's own name is the fixture it extends (the built-in, or an earlier fixture of that name), and tests, hooks, and other fixtures that name it get the value passed to `use`. It keeps the type, the scope, and the `auto` of the fixture it extends on the target, so a `device` override on a mobile target runs once per worker and reaches `beforeAll`, and an override of an `auto` fixture is set up for every test; a `scope` or an `auto` that differs is a `COLLECTION_ERROR` naming both. On a target without that built-in, nothing fails until code that runs there names it.
+  
+  A fixture named like a core fixture (`agent`, `app`, `screen`, `platform`, `session`), like one the target's engine contributes, or like one an earlier `extend` defined was refused before (`COLLECTION_ERROR`, or `TEST_SETUP_FAILED` in the test).
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `e2e init`, the update notice, and `e2e upgrade` now ask for a GitHub star.
+
+- [#1647](https://github.com/e2e-inc/e2e/pull/1647) [`d593863`](https://github.com/e2e-inc/e2e/commit/d593863b41de54dc2a8c5943efb6d7c88b7a18b7) Thanks [@kacperkapusciak](https://github.com/kacperkapusciak)! - `e2e init` can write a CI pipeline: a GitHub Actions workflow or a GitLab CI/CD file with one job for each platform the config's targets run on. Web targets run in a web job; iOS and Android targets get their own jobs, which build the app, boot a simulator or an emulator, and install the app. A config with both gets all of its jobs. The wizard asks for it in a project with the web or mobile engine and preselects the service the repository points to; `--ci github-actions` or `--ci gitlab` answers the question, and `--yes` alone writes none. The mobile jobs build Expo and bare React Native apps; any other app gets a build step to replace. GitLab's mobile jobs need self-managed runners. The jobs use the project's package manager and Node version and keep the report; for a project in a subfolder the file goes to the repository root. `init` names the secret or CI/CD variable to add and warns about what would fail on the first push. It never overwrites a pipeline file: beside an existing `.gitlab-ci.yml` it writes `.gitlab/e2e.gitlab-ci.yml` and prints the `include:` to add.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `e2e init` no longer says to add `test` to the stages of a `.gitlab-ci.yml` that already lists it with unindented items, or with a comment or blank line between them.
+
+- [#1799](https://github.com/e2e-inc/e2e/pull/1799) [`cfa2aa0`](https://github.com/e2e-inc/e2e/commit/cfa2aa0ecc77751fe56e4fbb8c938677cfa7ec01) Thanks [@samanyudas](https://github.com/samanyudas)! - Workers no longer die about 1 ms after a stop request when a grace budget built from `timeout` and `cleanupTimeout` is longer than 2^31-1 milliseconds. Ctrl-C now runs `afterEach` and disposes the engine with `timeout` near that limit, and engine disposal at the end of a run or on a second Ctrl-C finishes with `cleanupTimeout` near it.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - The JUnit report keeps the `\r\n` line breaks of failure messages and skip reasons instead of writing U+FFFD: `junit.xml` reads `&[#13](https://github.com/e2e-inc/e2e/issues/13);&[#10](https://github.com/e2e-inc/e2e/issues/10);`, and `report.json` and reporter events keep the `\r`. A `\r` with no `\n` after it still becomes U+FFFD, and the terminal output is unchanged.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `expect(locator, message)`, `expect(screen, message)`, and their `expect.soft` forms take an optional message, as value expectations already do. It opens every assertion failure, `.not` and `toHaveScreenshot` included, and a locator's `LOCATOR_AMBIGUOUS` error: `the cart is empty: expect.toBeVisible failed`.
+
+- [#1814](https://github.com/e2e-inc/e2e/pull/1814) [`5c7e18f`](https://github.com/e2e-inc/e2e/commit/5c7e18f922abb4830b9309498d89b088c040a268) Thanks [@jxnxts](https://github.com/jxnxts)! - The Markdown summary renders faster for files with many results. Output is unchanged.
+
+- [#1749](https://github.com/e2e-inc/e2e/pull/1749) [`6136421`](https://github.com/e2e-inc/e2e/commit/613642198b8c6a43abd2bb3152ecedfebb7c8ea5) Thanks [@bardrop](https://github.com/bardrop)! - With several workers, `--max-failures` no longer lets the worker whose failure reaches the limit start its next test. That test was cancelled a moment later and reported `interrupted`; it is now skipped with cause `failure-limit`, as the docs say.
+
+- [#1762](https://github.com/e2e-inc/e2e/pull/1762) [`5874e47`](https://github.com/e2e-inc/e2e/commit/5874e47c7dc4fea671d69d614ec7922f510b7d35) Thanks [@BloggerBust](https://github.com/BloggerBust)! - When an engine package provides separate `import` and `require` entries, the MCP server now uses the `import` entry when opening a session without a config file.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - A built-in agent tool that takes no input drops keys the model sends and runs. `observe`, `back`, `dismiss_keyboard`, and `screenshot` (when it has no `path`) used to reject a padded call such as `screenshot({"description": "check the home screen"})`, and some models resent that refusal until the step budget ended. A tool that declares fields still rejects a key it does not declare.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Parallel workers no longer fail and ask you to sign in again when a saved subscription login expires.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - The bundled e2e skill now tells an OpenCode agent to register `e2e mcp` in the project's `opencode.json`, and not with `opencode mcp add`, which writes the global config.
+
+- [#1736](https://github.com/e2e-inc/e2e/pull/1736) [`9949c8a`](https://github.com/e2e-inc/e2e/commit/9949c8aba23f3a3e09eb46d4184157fd3838d1a6) Thanks [@kdy1](https://github.com/kdy1)! - `e2e` exports `ProjectConfig`, the part of `E2EConfig` without `reporters` and `filters`.
+
+- [#1750](https://github.com/e2e-inc/e2e/pull/1750) [`2359860`](https://github.com/e2e-inc/e2e/commit/23598607832ca5989f8d9758313a4084eb98fdb3) Thanks [@KrzysztofMoch](https://github.com/KrzysztofMoch)! - `e2e run --step` works without a terminal, as in a coding agent's shell. The run goes on in the background and the command returns at the first held step, with the screen that step waits on. `e2e run --step next` runs the held step, prints how it ended, and returns at the next one; `e2e run --step rest` runs the rest, and `e2e run --step stop` ends the run. The last answer says the run has ended.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `STEP_NOT_AWAITED` names the code that left the step running. A step call without `await` in a `beforeEach` hook, a fixture's setup, or a `beforeAll` or `afterAll` hook used to read `the test body returned before ...`. It now reads `the beforeEach hook returned before app.open "/" finished`, `the fixture "account" setup returned before ...`, or `the beforeAll hook returned before ...`. A session opened with `@e2e-dev/core` says `the hosted session`.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `--strict-cache` no longer fails with `REPLAY_STALE` a never-recorded step whose test id, target, or agent name is over 300 characters and starts like a recorded one.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Add `test.skipIf(condition)` and `test.runIf(condition)`, which skip or run a test based on a condition, without wrapping `test()` in an `if`.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - Add `expect(locator).toHaveRole(role)`, which waits for the locator's match to have that role.
+
+- [#1851](https://github.com/e2e-inc/e2e/pull/1851) [`9034956`](https://github.com/e2e-inc/e2e/commit/9034956b204e57be2ef982148c02d1d573ec495d) Thanks [@Wali05](https://github.com/Wali05)! - Token counts just under a million now read `1.0M` instead of `1000.0k`, and the HTML report shows millions as `2.5M` instead of `2500.0k`.
+
+- [#1819](https://github.com/e2e-inc/e2e/pull/1819) [`3422abf`](https://github.com/e2e-inc/e2e/commit/3422abfb6a58a9f1f58e8532429e987e83053860) Thanks [@kdy1](https://github.com/kdy1)! - `agent.waitFor` judges a screen change as soon as it sees it instead of first waiting out `interval` after the previous judgment, so a condition that comes true mid-wait resolves within about 500 ms plus one model call rather than up to 3 s later. While the screen keeps changing (a progress counter, a clock), it still judges at most once per `interval`.
+
+- [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b) - `test.extend()` takes worker fixtures: `[fn, { scope: 'worker' }]`, typed with the second type argument (`base.extend<{}, { database: Database }>(...)`). A worker fixture is set up once per worker and target, the first time a test or suite hook registered through its `test` runs, and torn down when the worker ends. It sees worker fixtures only.
+  
+  `beforeAll` and `afterAll` now receive worker fixtures: `platform` and the worker fixtures of the `test` they were registered through. Reading a test fixture there fails the hook with `HOOK_FAILED` naming the fixture. `SuiteFixtures` and `SuiteHookFn` are deprecated aliases of `WorkerFixtures` and `TestHookFn<WorkerFixtures>`.
+  
+  `defineEngine` takes `isolation: 'worker'`, which the engine protocol's manifest carries too. It makes the engine's fixtures, `app`, and `screen` worker fixtures. `@e2e-dev/mobile` declares it, so a mobile `beforeAll` can set a permission or open the app.
+- Updated dependencies [[`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0a5ee16`](https://github.com/e2e-inc/e2e/commit/0a5ee16387cf213df547a8422b7d690675744986), [`dbe3dc5`](https://github.com/e2e-inc/e2e/commit/dbe3dc54a9123b10e535441f785de2e81a202798), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`1b7c3a9`](https://github.com/e2e-inc/e2e/commit/1b7c3a99d6e7dad74456da1476d522159ccf9b6d), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0cd14a0`](https://github.com/e2e-inc/e2e/commit/0cd14a0dfa9b87e52cce54348ab32f7dc0c44fc6), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b), [`3422abf`](https://github.com/e2e-inc/e2e/commit/3422abfb6a58a9f1f58e8532429e987e83053860), [`0d92d6b`](https://github.com/e2e-inc/e2e/commit/0d92d6bff1564e566f4030506fc2680a9a8dce9b)]:
+  - @e2e-dev/core@0.24.0
+
 ## 0.23.1
 
 ### Patch Changes
