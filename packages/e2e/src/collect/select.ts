@@ -1,7 +1,7 @@
 /** Option resolution and test-target selection. */
 
 import { staticSecretLedger } from '@e2e-dev/core/lib/run/secrecy';
-import { ConfigurationError, CollectionError, sanitizeText, truncateUtf8 } from '@e2e-dev/core/lib/internal/errors';
+import { ConfigurationError, CollectionError, sanitizeRecordedText, truncateUtf8 } from '@e2e-dev/core/lib/internal/errors';
 import { resultId } from '@e2e-dev/core/lib/internal/ids';
 import { expectedFailureOption } from '@e2e-dev/core/lib/internal/expected-failure';
 import { didYouMean, suggestionNote } from '@e2e-dev/core/lib/internal/suggest';
@@ -9,6 +9,7 @@ import type { ResolvedConfig, ResolvedTarget } from '@e2e-dev/core/lib/config/re
 import { attemptKeep, attemptVideo, pairRecording, type AttemptRecordings } from '@e2e-dev/core/lib/internal/recording-modes';
 import type { Capability, RecordingMode, TestOptions } from '@e2e-dev/core/lib/types';
 import { excludingEntry, type Collection, type CollectedTest, type UncollectedFile } from './collect.ts';
+import { assertFixtureUse } from './fixture-use.ts';
 import { groupChain } from './registry.ts';
 import type { SkipInfo } from '@e2e-dev/core/lib/run/records';
 
@@ -196,7 +197,7 @@ export function resolveOptions(test: CollectedTest, config: ResolvedConfig): Res
     session,
     agents: effectiveAgents(test, pin, config.agentNames),
     agentContext: agentContextParts.length === 0 ? undefined : agentContextParts.join('\n'),
-    skipReason: skipReason === undefined ? undefined : truncateUtf8(sanitizeText(staticSecretLedger(config.allSecrets).redact(skipReason)), 8192),
+    skipReason: skipReason === undefined ? undefined : truncateUtf8(sanitizeRecordedText(staticSecretLedger(config.allSecrets).redact(skipReason)), 8192),
     expectedFailure: expectedFailureOption(test.options.fail),
     serial: serialRoot !== undefined,
     trace,
@@ -310,7 +311,8 @@ export function selectTargets(
 
 /**
  * Expands the collection into test-target pairs and applies focus, tag,
- * platform, capability, session, and serial-closure rules.
+ * platform, capability, session, and serial-closure rules, then checks the
+ * fixtures each pair that runs names against its target.
  */
 export function select(
   collection: Collection,
@@ -365,6 +367,7 @@ export function select(
   const withExclusions =
     filters.excluded === undefined ? withShard : applySerialClosure(applyExclusions(withShard, filters.excluded));
   const withSessions = applySessionSelection(withExclusions, sessionProducers, collection.uncollected);
+  assertFixtureUse(withSessions, collection, config.projectRoot);
 
   const runnableOrdinary = withSessions.filter(
     (pair) => pair.disposition === 'run' && pair.test.kind === 'test',
